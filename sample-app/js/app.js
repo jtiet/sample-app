@@ -5,6 +5,13 @@ var apiKey;
 var session;
 var sessionId;
 var token;
+var archiveID;
+
+$(document).ready(function ready() {
+  $('#stop').hide();
+  $('#view').hide();
+  archiveID = null;
+});
 
 function initializeSession() {
   session = OT.initSession(apiKey, sessionId);
@@ -23,10 +30,6 @@ function initializeSession() {
     });
   });
 
-  session.on('sessionDisconnected', function sessionDisconnected(event) {
-    console.error('You were disconnected from the session.', event.reason);
-  });
-
   // Initialize the publisher
   var publisherOptions = {
     insertMode: 'append',
@@ -38,6 +41,28 @@ function initializeSession() {
       console.error('There was an error initializing the publisher: ', initErr.name, initErr.message);
       return;
     }
+  });
+
+  dragElement(document.getElementById("subscriber"));
+  dragElement(document.getElementById("publisher"));
+
+  session.on('archiveStarted', function archiveStarted(event) {
+    archiveID = event.id;
+    console.log('Archive started ' + archiveID);
+    $('#stop').show();
+    $('#start').hide();
+  });
+
+  session.on('archiveStopped', function archiveStopped(event) {
+    archiveID = event.id;
+    console.log('Archive stopped ' + archiveID);
+    $('#start').hide();
+    $('#stop').hide();
+    $('#view').show();
+  })
+
+  session.on('sessionDisconnected', function sessionDisconnected(event) {
+    console.error('You were disconnected from the session.', event.reason);
   });
 
   // Connect to the session
@@ -66,6 +91,56 @@ function initializeSession() {
   });
 }
 
+function startArchive() { // eslint-disable-line no-unused-vars
+  $.ajax({
+    url: SAMPLE_SERVER_BASE_URL + '/archive/start',
+    type: 'POST',
+    contentType: 'application/json', // send as JSON
+    data: JSON.stringify({'sessionId': sessionId}),
+
+    complete: function complete() {
+      // called when complete
+      console.log('startArchive() complete');
+    },
+
+    success: function success() {
+      // called when successful
+      console.log('successfully called startArchive()');
+    },
+
+    error: function error() {
+      // called when there is an error
+      console.log('error calling startArchive()');
+    }
+  });
+
+  $('#start').hide();
+  $('#stop').show();
+}
+
+function stopArchive() {
+  $.post(SAMPLE_SERVER_BASE_URL + '/archive/' + archiveID + '/stop');
+  $('#stop').hide();
+  $('#view').prop('disabled', false);
+  $('#stop').show();
+}
+
+function viewArchive() {
+  $('#view').prop('disabled', true);
+  var archiveUrl = SAMPLE_SERVER_BASE_URL + '/archive/' + archiveID + '/view';
+  // var $video = $("<iframe src=\""+archiveUrl+"\" style=\"border: 0; width: 50%; height: 50%\" ></iframe>");
+  // $('body').append($video);
+  var iframe = document.createElement('iframe');
+  iframe.frameBorder = 0;
+  // iframe.style.position = "absolute";
+  // iframe.style.left = "250px";
+  iframe.width = "610px";
+  iframe.height = "460px";
+  iframe.setAttribute("src", archiveUrl);
+  document.getElementById('archive').appendChild(iframe);
+  console.log("Archive is played");
+}
+
 // Text chat
 var form = document.querySelector('form');
 var msgTxt = document.querySelector('#msgTxt');
@@ -92,6 +167,9 @@ if (API_KEY && TOKEN && SESSION_ID) {
   sessionId = SESSION_ID;
   token = TOKEN;
   initializeSession();
+  $('#start').show();
+  $('#stop').hide();
+  $('#view').hide();
 } else if (SAMPLE_SERVER_BASE_URL) {
   // Make an Ajax request to get the OpenTok API key, session ID, and token from the server
   fetch(SAMPLE_SERVER_BASE_URL + '/session').then(function fetch(res) {
@@ -106,4 +184,36 @@ if (API_KEY && TOKEN && SESSION_ID) {
     console.error('There was an error fetching the session information', error.name, error.message);
     alert('Failed to get opentok sessionId and token. Make sure you have updated the config.js file.');
   });
+}
+
+function dragElement(element) {
+  var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+  if (document.getElementById(element.id + "Header")) {
+    document.getElementById(element.id + "Header").onmousedown = dragMouseDown;
+  } else {
+    element.onmousedown = dragMouseDown;
+  }
+
+  function dragMouseDown(e) {
+    e = e || window.event;
+    pos3 = e.clientX;
+    pos4 = e.clientY;
+    document.onmouseup = closeDragElement;
+    document.onmousemove = elementDrag;
+  }
+
+  function elementDrag(e) {
+    e = e || window.event;
+    pos1 = pos3 - e.clientX;
+    pos2 = pos4 - e.clientY;
+    pos3 = e.clientX;
+    pos4 = e.clientY;
+    element.style.top = (element.offsetTop - pos2) + "px";
+    element.style.left = (element.offsetLeft - pos1) + "px";
+  }
+
+  function closeDragElement() {
+    document.onmouseup = null;
+    document.onmousemove = null;
+  }
 }
